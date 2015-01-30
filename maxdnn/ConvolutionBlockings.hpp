@@ -93,13 +93,12 @@ namespace maxdnn
             int index=0;
 
             if (numArrays > 0) {
-                // TODO: Why is the caching broken?
-//                index = _alignIndex(arrayOffsets[numArrays-1] + arraySizes[numArrays-1]);
-//                if (index + size > Capacity) {
-//                    // If there is insufficient room in the array, clear it.
+                index = _alignIndex(arrayOffsets[numArrays-1] + arraySizes[numArrays-1]);
+                if (index + size > Capacity) {
+                    // If there is insufficient room in the array, clear it.
                     clear();
                     index = 0;
-//                }
+                }
             }
 
             arrayOffsets[numArrays] = index;
