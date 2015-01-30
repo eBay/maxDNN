@@ -1,0 +1,24 @@
+*.pyc
+*.so
+*.a
+*.o
+*.cuo
+*.bin
+*~
+.depend
+*.prof
+cubin
+asm
+new-kernels
+
+# generated files
+conv.cu
+conv.hpp
+conv.cuh
+conv_test.cpp
+*.asm
+*.cubin
+
+# log files
+*.log
+scratch.txt

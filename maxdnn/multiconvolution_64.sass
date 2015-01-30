@@ -1,0 +1,596 @@
+# Kernel: multiconvolution_64
+# Arch: sm_50
+# InsCnt: 45
+# RegCnt: 14
+# SharedSize: 8192
+# BarCnt: 1
+# Params(15):
+#	ord:addr:size:align
+#	0:0x140:8:0
+#	1:0x148:4:0
+#	2:0x14c:4:0
+#	3:0x150:4:0
+#	4:0x154:4:0
+#	5:0x158:4:0
+#	6:0x15c:4:0
+#	7:0x160:4:0
+#	8:0x164:4:0
+#	9:0x168:4:0
+#	10:0x16c:4:0
+#	11:0x170:4:0
+#	12:0x174:4:0
+#	13:0x178:4:0
+#	14:0x180:8:0
+#
+# Instructions:
+
+# Derived from sgemm64.sass in the Maxas project,
+# https://github.com/NervanaSystems/maxas/blob/master/sgemm/sgemm64.sass
+# Copyright (c) 2014 Scott Gray
+# Licensed under the MIT License
+#
+# Additional material for convolution,
+# Copyright (c) 2014, 2015 eBay Software Foundation
+# Licensed under the MIT License
+
+<CONSTANT_MAPPING>
+    blockDimX : c[0x0][0x8]
+    blockDimY : c[0x0][0xc]
+    blockDimZ : c[0x0][0x10]
+    gridDimX : c[0x0][0x14]
+    gridDimY : c[0x0][0x18]
+    gridDimZ : c[0x0][0x1c]
+
+    param_out[0] : c[0x0][0x140]
+    param_out[1] : c[0x0][0x144]
+    param_indexOffset : c[0x0][0x148]
+    param_numIndexes : c[0x0][0x14c]
+    param_stride : c[0x0][0x150]
+    param_Nb : c[0x0][0x154]
+    param_Nbf : c[0x0][0x158]
+    param_Wstride4 : c[0x0][0x15c]
+    param_Wo : c[0x0][0x160]
+    param_Ho : c[0x0][0x164]
+    param_No : c[0x0][0x168]
+    param_ldc : c[0x0][0x16c]
+    param_padding : c[0x0][0x170]
+    param_alpha : c[0x0][0x174]
+    param_blockingOffset: c[0x0][0x178]
+    param_diag[0] : c[0x0][0x180]
+    param_diag[1] : c[0x0][0x184]
+
+</CONSTANT_MAPPING>
+
+// Derived from sgemm64.sass in the Maxas project.
+
+<REGISTER_MAPPING>
+
+    0-63    ~ y_min_in, x_min_in, pixel_0, elmt, padding, Wstride, tid1, No4, Nb4, Wstride4, numIndexes, indexOffset, grid_dim_x, grid_dim_y, grid_dim_z, blocki, blockf
+    
+    80      : zOffset
+    0-63    : cz<00-63>
+
+     3, 2,11,10,19,18,27,26 : cx00y<00-03|32-35>
+     7, 6,15,14,23,22,31,30 : cx01y<00-03|32-35>
+     1, 0, 9, 8,17,16,25,24 : cx02y<00-03|32-35>
+     5, 4,13,12,21,20,29,28 : cx03y<00-03|32-35>
+    35,34,43,42,51,50,59,58 : cx32y<00-03|32-35>
+    39,38,47,46,55,54,63,62 : cx33y<00-03|32-35>
+    33,32,41,40,49,48,57,56 : cx34y<00-03|32-35>
+    37,36,45,44,53,52,61,60 : cx35y<00-03|32-35>
+
+    64-79   : j0Imx<00-03|32-35>, j0Flty<00-03|32-35>
+    80-95   : j1Imx<00-03|32-35>, j1Flty<00-03|32-35>
+
+    64-71   : cs<0-7>
+
+    96-111  : loadFlt0<0-3>, loadIm0<0-3>, loadFlt4<0-3>, loadIm4<0-3>
+
+    112-115 : trackFlt<0|4>, trackIm<0|4>
+
+    116-127 ~ trackImIndex, readFlts, readIms, writeS, end, ldflt8, tid, I, i_b, f_b
+
+    // 38 regs
+    72-85   : Cy<00|10|04|14|08|18|12|112>, cy<00|04|08|12>
+    86-111  ~ ldc, ldc1, ldc4, ldc8, ldc28, writeCs, readCs, cx, ci, xmad_ci, tid31, tid32, readS, beta, Wo, Ho, Nb, stride, bx, by, bz, tmp, alpha, tmp2 # , diag0, diag1
+
+</REGISTER_MAPPING>
+
+--:-:1:-:1      S2R tid, SR_TID.X;
+--:-:2:-:1      S2R bx, SR_CTAID.X;
+--:-:3:-:1      S2R by, SR_CTAID.Y;
+--:-:4:-:1      S2R bz, SR_CTAID.Z;
+
+<SCHEDULE_BLOCK>
+
+--:-:-:-:1      MOV indexOffset, param_indexOffset;
+--:-:-:-:1      MOV numIndexes, param_numIndexes;
+--:-:-:-:1      MOV stride, param_stride;
+
+08:-:-:-:1      IADD bz, bz, param_blockingOffset;
+// pixel_0 = tid/16;
+01:-:-:-:1      SHR.U32 pixel_0, tid, 4;
+
+// elmt = tid%16;
+--:-:-:-:1      LOP.AND elmt, tid, 0x0f;
+
+--:-:-:-:1      LOP.AND zOffset, tid, -32;
+--:-:-:-:1      STS.128 [zOffset + 4x<16*64>], RZ;
+
+// writeS = pixel_0*256+elmt*16;
+--:-:-:-:1      SHL writeS, pixel_0, 0x8;
+--:-:-:-:1      ISCADD writeS, elmt, writeS, 0x4;
+
+--:-:-:-:1      ISCADD blockf, bz, 0xfd08, 0x2; # f_b
+--:-:-:-:1      ISCADD blocki, bz, 0xfc08, 0x2; # i_b
+--:-:4:-:1      LDC i_b, c[0x3][blocki];
+--:-:5:-:1      LDC f_b, c[0x3][blockf];
+
+// y_min_in = blockIdx.y*stride-padding;
+--:-:-:-:d      MOV padding, param_padding;
+04:-:-:-:6      XMAD y_min_in, by, stride, padding;
+--:-:-:-:6      XMAD.PSL y_min_in, by.H1, stride, y_min_in;
+
+// x_min_in = blockIdx.x*stride-padding;
+02:-:-:-:6      XMAD x_min_in, bx, stride, padding;
+--:-:-:-:6      XMAD.PSL x_min_in, bx.H1, stride, x_min_in;
+
+// readIms = ((tid >> 1) & 7) << 4;
+--:-:-:-:1      BFE.U32 readIms, tid, 0x301;
+--:-:-:-:1      SHL readIms, readIms, 4;
+
+// readFlts = (((tid & 48) >> 3) | (tid & 1)) << 4 + 2048
+--:-:-:-:1      LOP.AND tid1, tid, 1;
+--:-:-:-:1      LOP.AND readFlts, tid, 0x30;
+--:-:-:-:1      SHR.U32 readFlts, readFlts, 3;
+--:-:-:-:1      LOP.OR readFlts, readFlts, tid1;
+--:-:-:-:1      ISCADD readFlts, readFlts, 4x<8*64>, 4;
+
+// I = (y_min_in*Wstride+x_min_in*Nb + i_b*64)/4 + elmt
+//   = y_min_in*Wstride/4 + x_min_in*Nb/4 + i_b*16 + elmt
+--:-:-:-:1      MOV Wstride4, param_Wstride4;
+--:-:-:-:1      MOV Nb, param_Nb;
+--:-:-:-:1      SHR.U32 Nb4, Nb, 2;
+--:-:-:-:1      XMAD I, y_min_in, Wstride4, elmt;
+--:-:-:-:1      XMAD.PSL I, y_min_in.H1, Wstride4, I;
+--:-:-:-:1      XMAD I, x_min_in, Nb4, I;
+--:-:-:-:1      XMAD.PSL I, x_min_in.H1, Nb4, I;
+08:-:-:-:1      ISCADD I, i_b, I, 0x4;
+
+--:-:-:-:1      MOV No4, param_No;
+--:-:-:-:1      SHR.U32 No4, No4, 2;
+
+// ldflt8 = No*2;
+--:-:-:-:1      SHL.W ldflt8, No4, 3;
+
+// trackFlt0 = F = (f_b*64 + pixel_0*No)/4 + elmt
+//                 = f_b*16 + pixel_0*No/4 + elmt
+--:-:-:-:1      XMAD trackFlt0, pixel_0, No4, elmt;
+--:-:-:-:1      XMAD.PSL trackFlt0, pixel_0.H1, No4, trackFlt0;
+10:-:-:-:1      ISCADD trackFlt0, f_b, trackFlt0, 0x4;
+
+// trackImIndex = (indexOffset + pixel_0)*4
+// end = trackImIndex + numIndexes*4 // + 32?
+--:-:-:-:1      IADD trackImIndex, indexOffset, pixel_0;
+--:-:-:-:1      SHL.W trackImIndex, trackImIndex, 2;
+--:-:-:-:1      ISCADD end, numIndexes, trackImIndex, 0x2;
+--:-:-:-:1      IADD end, end, 32;
+
+</SCHEDULE_BLOCK>
+
+#--:-:-:-:5      CAL DIAG_OUT;
+#--:-:-:-:f      EXIT;
+
+// trackIm0 = I + trackImIndex[0*4];
+// trackIm4 = I + trackImIndex[1*4];
+--:5:1:-:1      LDC trackIm0, c[0x3][trackImIndex+0x104];
+--:6:2:-:1      LDC trackIm4, c[0x3][trackImIndex+0x114];
+
+<SCHEDULE_BLOCK>
+01:-:-:-:1      IADD trackIm0, trackIm0, I;
+02:-:-:-:1      IADD trackIm4, trackIm4, I;
+
+// trackFlt4 = F + No;
+--:-:-:-:1      ISCADD trackFlt4, No4, trackFlt0, 0x2;
+
+<ORDERED>
+--:-:1:-:1      TLDS.LZ.T loadFlt02, loadFlt00, trackFlt0, 0x63, 1D, RGBA;
+--:-:2:-:1      TLDS.LZ.T loadIm02, loadIm00, trackIm0, 0x62, 1D, RGBA;
+--:-:3:-:1      TLDS.LZ.T loadFlt42, loadFlt40, trackFlt4, 0x63, 1D, RGBA;
+--:-:4:-:1      TLDS.LZ.P loadIm42, loadIm40, trackIm4, 0x62, 1D, RGBA;
+</ORDERED>
+
+30:-:-:-:1      IADD trackImIndex, trackImIndex, 32;
+
+</SCHEDULE_BLOCK>
+
+<CODE>
+    return join '', map sprintf("--:-:5:-:1      LDS.U.128 cz%02d, [zOffset + 4x<16*64>];\n", $_ * 4), 0..15;
+</CODE>
+
+<SCHEDULE_BLOCK>
+
+02:-:-:-:1     STS.128 [writeS + 4x<0*64>], loadIm00;
+01:-:-:-:1     STS.128 [writeS + 4x<0*64+512>], loadFlt00;
+08:-:-:-:1     STS.128 [writeS + 4x<4*64>], loadIm40;
+04:-:-:-:1     STS.128 [writeS + 4x<4*64+512>], loadFlt40;
+
+--:3:1:-:1     LDC trackIm0, c[0x3][trackImIndex+0x104];
+--:4:2:-:1     LDC trackIm4, c[0x3][trackImIndex+0x114];
+--:-:-:-:1     IADD trackFlt0, trackFlt0, ldflt8;
+--:-:-:-:1     IADD trackFlt4, trackFlt4, ldflt8;
+0C:-:-:-:1     IADD trackImIndex, trackImIndex, 32;
+
+10:-:-:-:5     BAR.SYNC 0;
+
+</SCHEDULE_BLOCK>
+
+--:-:-:-:0      LOP.XOR writeS, writeS, 4096;
+--:-:-:-:1      LDS.U.128 j0Flty00, [readFlts + 4x<0*64 + 00>]; // 
+01:-:-:-:0      IADD trackIm0, trackIm0, I;
+--:-:-:-:1      LDS.U.128 j0Imx00, [readIms + 4x<0*64 + 00>];
+02:-:-:-:0      IADD trackIm4, trackIm4, I;
+--:-:-:-:1      LDS.U.128 j0Flty32, [readFlts + 4x<0*64 + 32>];
+--:-:1:-:1      LDS.U.128 j0Imx32, [readIms + 4x<0*64 + 32>]; // Set Dep 1
+
+
+      // 512 FFMA
+      //   5 IADD
+      //   3 XOR
+      //   1 SETP
+      // --------
+      // 512/521 = 98.3 % FFMA
+
+LOOP:
+
+// Loop end condition
+--:-:-:-:1      ISETP.LE.AND P0, PT, trackImIndex, end, PT;
+
+<CODE>
+
+    my @cOrder;
+    my @swirl = ([2,0],[2,1],[0,1],[0,0]);
+    my @x = (0,1,32,33);
+    foreach my $y (0,2,32,34)
+    {
+        foreach my $x (@x)
+        {
+            push @cOrder, [$x + $_->[0], $y + $_->[1]] foreach @swirl;
+        }
+        @x = reverse @x;
+    }
+
+    my %insert =
+    (
+         j0c31 => "--:-:2:-:1  \@P0 TLDS.LZ.T loadFlt02, loadFlt00, trackFlt0, 0x63, 1D, RGBA;\n",
+         j0c33 => "--:-:3:-:1  \@P0 TLDS.LZ.T loadIm02, loadIm00, trackIm0, 0x62, 1D, RGBA; // Set Dep 2\n",
+
+         j1c31 => "--:-:4:-:1  \@P0 TLDS.LZ.T loadFlt42, loadFlt40, trackFlt4, 0x63, 1D, RGBA;\n",
+         j1c33 => "--:-:5:-:1  \@P0 TLDS.LZ.P loadIm42, loadIm40, trackIm4, 0x62, 1D, RGBA; // Set Dep 3\n",
+
+         j5c30 => "02:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64+512>], loadFlt00; // Wait Dep 2\n",
+         j5c34 => "04:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64>], loadIm00;\n",
+
+         j6c30 => "08:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64+512>], loadFlt40; // Wait Dep 3\n",
+         j6c34 => "10:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64>], loadIm40;\n",
+
+        j6c62 =>
+                "01:-:-:-:5      BAR.SYNC 0;                            // Wait Dep 1\n" .
+                "--:-:-:-:1  \@P0 LOP.XOR readFlts, readFlts, 4x<16*64>;\n" .
+                "--:-:-:-:1  \@P0 LOP.XOR readIms, readIms, 4x<16*64>;\n" .
+                "--:-:-:-:1  \@P0 LOP.XOR writeS, writeS, 4x<16*64>;\n",
+
+        j7c63 =>
+                "--:-:-:-:0  \@P0 IADD trackFlt0, trackFlt0, ldflt8;\n" .
+		"--:3:4:-:1  \@P0 LDC trackIm0, c[0x3][trackImIndex+0x104];\n" .
+                "--:-:-:-:0  \@P0 IADD trackFlt4, trackFlt4, ldflt8;\n" .
+		"--:5:6:-:1  \@P0 LDC trackIm4, c[0x3][trackImIndex+0x114];\n" .
+		"08:-:-:-:1  \@P0 IADD trackIm0, trackIm0, I;\n" .
+		"20:-:-:-:1  \@P0 IADD trackIm4, trackIm4, I;\n" .
+                "14:-:-:-:1  \@P0 IADD trackImIndex, trackImIndex, 32;\n" .
+                "--:-:-:Y:5  \@P0 BRA LOOP;\n",
+    );
+
+    my $out;
+    foreach my $j (0 .. 7)
+    {
+        my $odd      = $j & 1;
+        my $nOdd     = !$odd + 0;
+        my $rsOffset = ($j + 1) % 8;
+        my $rsPred   = $j == 7 ? '@P0' : '   ';
+
+        $insert{"j${j}c0"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dFlty00, [readFlts + 4x<%d*64 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c2"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dImx00, [readIms + 4x<%d*64 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c4"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dFlty32, [readFlts + 4x<%d*64 + 32>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c6"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dImx32, [readIms + 4x<%d*64 + 32>]; // Set Dep 1\n", $rsPred, $nOdd, $rsOffset;
+
+        foreach my $c (0 .. 63)
+        {
+            my ($x,$y) = @{$cOrder[$c]};
+
+            my $ins    = $insert{"j${j}c$c"} || '';
+
+            my $yield  = $c == 32 ? 'Y' : '-';
+
+            my ($wait, $comment) = $c == 0 && $j < 7 ? ('01', ' // Wait Dep 1') : ('--','');
+
+            my $stall  = $ins =~ /LDS|TLD|STS|BAR/ ? 0 : 1;
+
+            my $ctrl   = "$wait:-:-:$yield:$stall";
+
+            $out .= sprintf "%s      FFMA cx%02dy%02d, j%dImx%02d, j%dFlty%02d, cx%02dy%02d;%s\n%s", $ctrl,  $x,$y,  $odd,$x,  $odd,$y,  $x,$y,  $comment,  $ins;
+        }
+    }
+    return $out;
+
+</CODE>
+
+--:-:-:-:1      S2R bx, SR_CTAID.X;
+--:-:1:-:1      S2R by, SR_CTAID.Y;
+
+<SCHEDULE_BLOCK>
+
+--:-:-:-:1      LOP.AND tid31, tid, 31;
+--:-:-:-:1      LOP.AND tid32, tid, 32;
+
+--:-:-:-:1      LOP.AND readFlts, readFlts, 0x7ff;
+--:-:-:-:1      LOP.AND readIms, readIms, 0x7ff;
+
+// writeCs = (readFlts / 4) * 64 + readIms;
+// readIms is the inner dimension of the output map. Essentially this
+// means the output matrix is row-major.  This is reversed from
+// maxas-sgemm, where the output matrix is column major.
+--:-:-:-:1      ISCADD  writeCs, readFlts, readIms, 4;
+
+// readCs = ((tid32 << 3) + tid31) << 2;
+--:-:-:-:1      ISCADD  readCs, tid32,  tid31, 3;
+--:-:-:-:1      SHL     readCs, readCs, 2;
+
+// cy00 = cy = f_min
+--:-:-:-:1      SHR.U32 cy00, tid32, 1;
+--:-:-:-:1      ISCADD cy00, f_b, cy00, 6;
+
+// cx = i_min
+--:-:-:-:1      ISCADD cx, i_b, tid31, 6;
+
+// Some arguments
+--:-:-:-:d      MOV Ho, param_Ho;
+--:-:-:-:d      MOV Wo, param_Wo;
+--:-:-:-:d      MOV Nb, param_Nb;
+
+// C += &maps[((f_min*Ho+blockIdx.y)*Wo+blockIdx.x)*Nb+i_min]
+//      ((cy*Ho + by)*Wo + bx)*Nb + cx
+01:-:-:-:1      XMAD     tmp, cy00, Ho, by;
+--:-:-:-:1      MOV   ldc, param_ldc; // ldc = Wo*Ho*Nb
+--:-:-:-:1      XMAD.PSL tmp, cy00.H1, Ho, tmp;
+--:-:-:-:1      XMAD     tmp2, tmp, Wo, bx;
+--:-:-:-:1      XMAD.PSL tmp2, tmp.H1, Wo, tmp2;
+--:-:-:-:1      XMAD     ci, tmp2, Nb, cx;
+--:-:-:-:1      XMAD.PSL ci, tmp2.H1, Nb, ci;
+--:-:-:-:1      SHL.W    ci, ci, 0x2;
+--:-:-:-:1      IADD     Cy00.CC, ci, param_out[0];
+--:-:-:-:1      IADD.X   Cy10, RZ, param_out[1];
+
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx, Nb, PT; // cx +  0 < Nb
+--:-:-:-:1      IADD cx, cx, 32;
+--:-:-:-:1      ISETP.LT.AND P6, PT, cx, Nb, PT; // cx + 64 < Nb
+
+--:-:-:-:1      IADD cy00, cy00, -1;
+--:-:-:-:1      IADD cy04, cy00,  4;
+--:-:-:-:1      IADD cy08, cy00,  8;
+--:-:-:-:1      IADD cy12, cy00,  12;
+
+--:-:-:-:1      SHL  ldc1,  ldc, 2;
+--:-:-:-:1      SHL  ldc4,  ldc, 4;
+--:-:-:-:1      SHL  ldc8,  ldc, 5;
+--:-:-:-:1      ISCADD ldc28, ldc, -ldc4, 7;
+
+--:-:-:-:1      MOV alpha, param_alpha;
+--:-:-:-:1      FMUL cs0, cx00y00, alpha;
+--:-:-:-:1      FMUL cs1, cx01y00, alpha;
+--:-:-:-:1      FMUL cs2, cx02y00, alpha;
+--:-:-:-:1      FMUL cs3, cx03y00, alpha;
+--:-:-:-:1      FMUL cs4, cx32y00, alpha;
+--:-:-:-:1      FMUL cs5, cx33y00, alpha;
+--:-:-:-:1      FMUL cs6, cx34y00, alpha;
+--:-:-:-:1      FMUL cs7, cx35y00, alpha;
+
+--:-:-:-:1      IADD Cy00, Cy00, -ldc1;
+--:-:-:-:1      IADD Cy04, Cy00, ldc4;
+--:-:-:-:1      IADD Cy08, Cy00, ldc8;
+--:-:-:-:1      MOV  Cy14, Cy10;
+--:-:-:-:1      MOV  Cy18, Cy10;
+--:-:-:-:1      MOV  Cy112, Cy10;
+--:-:-:-:0      IADD Cy12, Cy04, ldc8; // Dual Issue (last instruction after reordering)
+
+</SCHEDULE_BLOCK>
+
+<CODE>
+
+    my $out;
+    foreach my $y (0..3, 32..35)
+    {
+        my ($wait, $comment) = $y == 32 ? ('--', '') : ('02',' // Wait Dep 2');
+
+        $out .=
+            "--:-:-:-:1      IADD cy00, cy00, 28;\n" .
+            "--:-:-:-:1      IADD cy04, cy04, 28;\n" .
+            "--:-:-:-:1      IADD cy08, cy08, 28;\n" .
+            "--:-:-:-:1      IADD cy12, cy12, 28;\n\n" .
+
+            "02:-:-:-:1      IADD Cy00, Cy00, ldc28; // Wait Dep 2\n" .
+            "--:-:-:-:1      IADD Cy04, Cy04, ldc28;\n" .
+            "--:-:-:-:1      IADD Cy08, Cy08, ldc28;\n" .
+            "--:-:-:-:1      IADD Cy12, Cy12, ldc28;\n\n"  if $y == 32;
+
+        $out .= sprintf(
+            "%s:-:-:-:1      FMUL cs0, cx00y%02d, alpha;%s\n" .
+            "--:-:-:-:1      FMUL cs1, cx01y%02d, alpha;\n" .
+            "--:-:-:-:1      FMUL cs2, cx02y%02d, alpha;\n" .
+            "--:-:-:-:1      FMUL cs3, cx03y%02d, alpha;\n" .
+            "--:-:-:-:1      FMUL cs4, cx32y%02d, alpha;\n" .
+            "--:-:-:-:1      FMUL cs5, cx33y%02d, alpha;\n" .
+            "--:-:-:-:1      FMUL cs6, cx34y%02d, alpha;\n" .
+            "--:-:-:-:0      FMUL cs7, cx35y%02d, alpha; // Dual Issue\n",
+            $wait, $y, $comment, ($y) x 7) if $y;
+
+        $out .= "--:-:-:-:5      CAL STORE_C;\n\n";
+    }
+    return $out;
+
+</CODE>
+
+--:-:-:-:f      EXIT;
+
+
+# DIAG_OUT:
+
+# --:-:1:-:1      S2R tid, SR_TID.X;
+# --:-:2:-:1      S2R bx, SR_CTAID.X;
+# --:-:3:-:1      S2R by, SR_CTAID.Y;
+# --:-:4:-:1      S2R bz, SR_CTAID.Z;
+
+# // offset = (((bz*grid_dim_y + by)*grid_dim_x + bx)*64*32 + tid)*4
+# --:-:-:-:6      MOV grid_dim_x,  gridDimX;
+# --:-:-:-:6      MOV grid_dim_y,  gridDimY;
+# --:-:-:-:6      MOV grid_dim_z,  gridDimZ;
+
+# <SCHEDULE_BLOCK>
+# 0f:-:-:-:1      XMAD tmp, bz, grid_dim_y, by;
+# --:-:-:-:1      XMAD.PSL tmp, bz.H1, grid_dim_y, tmp;
+# --:-:-:-:1      XMAD tmp2, tmp, grid_dim_x, bx;
+# --:-:-:-:1      XMAD.PSL tmp2, tmp.H1, grid_dim_x, tmp2;
+
+# --:-:-:-:1      ISCADD tmp2, tmp2, tid, 0xb;
+# --:-:-:-:1      SHL.W tmp2, tmp2, 0x2;
+
+# // diag0 = param_diag[0] + bz, set carry flag
+# --:-:-:-:1      IADD diag0.CC, tmp2, param_diag[0];
+
+# // diag1 = param_diag[1] + tmp + carry-flag
+# --:-:-:-:1      IADD.X diag1, RZ, param_diag[1];
+# </SCHEDULE_BLOCK>
+
+# --:-:-:-:1      STG.E [diag0], tid;               // diag[0]
+# --:-:-:-:1      STG.E [diag0+0x100], bx;      // diag[64]
+# --:-:-:-:1      STG.E [diag0+0x200], bz;     // diag[128]
+# --:-:-:-:1      STG.E [diag0+0x300], i_b;     // diag[192]
+# --:-:-:-:1      STG.E [diag0+0x400], f_b;       // diag[256]
+# --:-:-:-:1      STG.E [diag0+0x500], blocki;      // diag[320]
+# --:-:-:-:1      STG.E [diag0+0x600], blockf;  // diag[384]
+# --:-:-:-:1      STG.E [diag0+0x700], I;            // diag[448]
+# --:-:-:-:1      STG.E [diag0+0x800], trackImIndex;   // diag[512]
+# --:-:-:-:1      STG.E [diag0+0x900], end; // diag[576]
+# --:-:-:-:1      STG.E [diag0+0xA00], numIndexes;   // diag[640]
+# --:-:-:-:1      STG.E [diag0+0xB00], x_min_in;   // diag[704]
+# --:-:-:-:1      STG.E [diag0+0xC00], y_min_in;   // diag[768]
+# --:-:-:-:1      STG.E [diag0+0xD00], trackFlt4;  // diag[832]
+# #--:-:-:-:1      STG.E [diag0+0xE00], writeS;    // diag[896]
+# --:-:-:-:1      STG.E [diag0+0xE00], cx00y00;    // diag[896]
+# --:-:-:-:1      STG.E [diag0+0xF00], j0Flty00;         // diag[960]
+# --:-:-:-:1      STG.E [diag0+0x1000], j0Flty01;        // diag[1024]
+# --:-:-:-:1      STG.E [diag0+0x1100], j0Imx00;        // diag[1088]
+# --:-:-:-:1      STG.E [diag0+0x1200], j0Imx01;        // diag[1152]
+# # --:-:-:-:1      STG.E [diag0+0xF00], loadIm00;         // diag[960]
+# # --:-:-:-:1      STG.E [diag0+0x1000], loadIm01;        // diag[1024]
+# # --:-:-:-:1      STG.E [diag0+0x1100], loadIm02;        // diag[1088]
+# # --:-:-:-:1      STG.E [diag0+0x1200], loadIm03;        // diag[1152]
+# --:-:-:-:1      STG.E [diag0+0x1300], j1Flty00;       // diag[1216]
+# --:-:-:-:1      STG.E [diag0+0x1400], j1Flty01;       // diag[1280]
+# --:-:-:-:1      STG.E [diag0+0x1500], j1Imx00;       // diag[1344]
+# --:-:-:-:1      STG.E [diag0+0x1600], j1Imx01;       // diag[1408]
+# # --:-:-:-:1      STG.E [diag0+0x1300], loadFlt00;       // diag[1216]
+# # --:-:-:-:1      STG.E [diag0+0x1400], loadFlt01;       // diag[1280]
+# # --:-:-:-:1      STG.E [diag0+0x1500], loadFlt02;       // diag[1344]
+# # --:-:-:-:1      STG.E [diag0+0x1600], loadFlt03;       // diag[1408]
+# --:-:-:-:1      STG.E [diag0+0x1700], loadIm40;        // diag[1472]
+# --:-:-:-:1      STG.E [diag0+0x1800], loadIm41;        // diag[1536]
+# --:-:-:-:1      STG.E [diag0+0x1900], loadIm42;        // diag[1600]
+# --:-:-:-:1      STG.E [diag0+0x1A00], loadIm43;        // diag[1664]
+# --:-:-:-:1      STG.E [diag0+0x1B00], loadFlt40;       // diag[1728]
+# --:-:-:-:1      STG.E [diag0+0x1C00], loadFlt41;       // diag[1792]
+# --:-:-:-:1      STG.E [diag0+0x1D00], loadFlt42;       // diag[1856]
+# --:-:-:-:1      STG.E [diag0+0x1E00], loadFlt43;       // diag[1920]
+# # 0x2000 == WHAMMY!
+
+# # --:-:-:-:1      STG.E [diag0], tid;              // diag[0]
+# # --:-:-:-:1      STG.E [diag0+0x100], grid_dim_x; // diag[64]
+# # #--:-:-:-:1      STG.E [diag0+0x200], grid_dim_y; // diag[128]
+# # #--:-:-:-:1      STG.E [diag0+0x300], grid_dim_z;        // diag[192]
+# # --:-:-:-:1      STG.E [diag0+0x200], cx00y00; // diag[128]
+# # #--:-:-:-:1      STG.E [diag0+0x300], cy00;        // diag[192]
+# # #--:-:-:-:1      STG.E [diag0+0x400], cy04;       // diag[256]
+# # #--:-:-:-:1      STG.E [diag0+0x500], cy08;         // diag[320]
+# # #--:-:-:-:1      STG.E [diag0+0x600], cy12;       // diag[384]
+# # #--:-:-:-:1      STG.E [diag0+0x700], cx;         // diag[448]
+# # #--:-:-:-:1      STG.E [diag0+0x800], cs7;        // diag[512]
+# # --:-:-:-:1      STG.E [diag0+0x300], cs0;        // diag[192]
+# # --:-:-:-:1      STG.E [diag0+0x400], cs1;       // diag[256]
+# # --:-:-:-:1      STG.E [diag0+0x500], cs2;         // diag[320]
+# # --:-:-:-:1      STG.E [diag0+0x600], cs3;       // diag[384]
+# # --:-:-:-:1      STG.E [diag0+0x700], cs4;         // diag[448]
+# # --:-:-:-:1      STG.E [diag0+0x800], cs7;        // diag[512]
+# # --:-:-:-:1      STG.E [diag0+0x900], alpha;      // diag[576]
+# # --:-:-:-:1      STG.E [diag0+0xA00], ldc;        // diag[640]
+# # --:-:-:-:1      STG.E [diag0+0xB00], ldc;        // diag[704]
+# # --:-:-:-:1      STG.E [diag0+0xC00], ldc;    // diag[768]
+# # --:-:-:-:1      STG.E [diag0+0xD00], ci;   // diag[832]
+# # --:-:-:-:1      STG.E [diag0+0xE00], Cy00;       // diag[896]
+# # --:-:-:-:1      STG.E [diag0+0xF00], Cy10;       // diag[960]
+# # --:-:-:-:1      STG.E [diag0+0x1000], Cy04;       // diag[1024]
+# # 02:-:-:-:1      STG.E [diag0+0x1100], Cy08;       // diag[1088]
+# # --:-:-:-:1      STG.E [diag0+0x1200], Cy12;       // diag[1152]
+# # 0x2000 == WHAMMY!
+
+# --:-:-:-:5      RET;
+
+
+STORE_C:
+
+<SCHEDULE_BLOCK>
+
+--:-:-:-:1      STS.128 [writeCs+4x<00>], cs0;
+--:-:-:-:1      STS.128 [writeCs+4x<32>], cs4;
+
+--:-:-:-:1      LDS cs0, [readCs + 4x<0*64 + 00>];
+--:-:-:-:1      LDS cs1, [readCs + 4x<0*64 + 32>];
+--:-:-:-:1      LDS cs2, [readCs + 4x<1*64 + 00>];
+--:-:-:-:1      LDS cs3, [readCs + 4x<1*64 + 32>];
+--:-:-:-:1      LDS cs4, [readCs + 4x<2*64 + 00>];
+--:-:-:-:1      LDS cs5, [readCs + 4x<2*64 + 32>];
+--:-:-:-:1      LDS cs6, [readCs + 4x<3*64 + 00>];
+--:-:1:-:1      LDS cs7, [readCs + 4x<3*64 + 32>]; // Set Dep 1
+
+--:-:-:-:1      IADD cy00, cy00, 1;
+--:-:-:-:1      IADD cy04, cy04, 1;
+--:-:-:-:1      IADD cy08, cy08, 1;
+--:-:-:-:1      IADD cy12, cy12, 1;
+
+--:-:-:-:1      IADD Cy00, Cy00, ldc1;
+--:-:-:-:1      IADD Cy04, Cy04, ldc1;
+--:-:-:-:1      IADD Cy08, Cy08, ldc1;
+--:-:-:-:1      IADD Cy12, Cy12, ldc1;
+
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy00, param_No, P5; // cy00 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy00, param_No, P6; // cy00 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy04, param_No, P5; // cy04 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy04, param_No, P6; // cy04 < n && cx + 32 < m
+
+01:-:-:-:1  @P0 STG.E [Cy00 + 4x<00>], cs0; // Wait Dep 1
+--:-:-:-:1  @P1 STG.E [Cy00 + 4x<32>], cs1;
+--:-:-:-:1  @P2 STG.E [Cy04 + 4x<00>], cs2;
+--:-:-:-:1  @P3 STG.E [Cy04 + 4x<32>], cs3;
+
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy08, param_No, P5; // cy08 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy08, param_No, P6; // cy08 < n && cx + 32 < m
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy12, param_No, P5; // cy12 < n && cx +  0 < m
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy12, param_No, P6; // cy12 < n && cx + 32 < m
+
+--:-:-:-:1  @P0 STG.E [Cy08 + 4x<00>], cs4;
+--:-:-:-:1  @P1 STG.E [Cy08 + 4x<32>], cs5;
+--:-:-:-:1  @P2 STG.E [Cy12 + 4x<00>], cs6;
+--:2:-:-:1  @P3 STG.E [Cy12 + 4x<32>], cs7; // Set Dep 2
+
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5      RET;

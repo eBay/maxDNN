@@ -1,0 +1,48 @@
+/*
+Copyright (c) 2014 eBay Software Foundation
+Licensed under the MIT License
+*/
+#include "maxdnn/File.hpp"
+#include "maxdnn/FileSystem.hpp"
+#include "UnitTest++.h"
+#include <vector>
+#include <cstring>
+#include <stdint.h>
+using namespace maxdnn;
+using namespace std;
+namespace fs=maxdnn::FileSystem;
+
+struct FileTestFixture
+{
+    FileTestFixture()
+    {
+        fileName = "/tmp/file-test-file";
+    }
+
+    ~FileTestFixture()
+    {
+    }
+    
+    string fileName;
+};
+    
+SUITE(File)
+{
+    TEST_FIXTURE(FileTestFixture, CreateWriteRead)
+    {
+        File file(fileName, File::Create|File::Read|File::Write);
+
+        CHECK(fs::exists(fileName));
+        CHECK(fs::isRegularFile(fileName));
+
+        const char *data = "Now is the time for all good objects to be dumped";
+        const size_t n = strlen(data);
+        
+        vector<uint8_t> buf(n);
+        CHECK(file.write(data, n));
+        CHECK_EQUAL(0, file.seek(0, File::Set));
+        CHECK(file.read(&buf[0], n));
+        
+        CHECK_EQUAL(0, memcmp(data, &buf[0], n));
+    }
+}
