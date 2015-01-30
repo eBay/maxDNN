@@ -40,7 +40,7 @@ Install
 
 1. Get the software.
 
-        git clone https://the/repo/url/maxDNN.git
+        git clone https://github.com/eBay/maxDNN.git
 
 2. Install the external requirements above.
 
