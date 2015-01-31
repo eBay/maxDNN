@@ -5,11 +5,9 @@ Licensed under the MIT License
 #include "maxdnn/GpuData.hpp"
 #include "maxdnn/HostData.hpp"
 #include "maxdnn/GpuException.hpp"
+#include "maxdnn/gpu.h"
 #include <cuda_runtime.h>
 #include <sstream>
-
-#define CUDA_CHECK(R)                                   \
-    MAXDNN_ASSERT(R==cudaSuccess, CudaException(R))
 
 namespace maxdnn
 {

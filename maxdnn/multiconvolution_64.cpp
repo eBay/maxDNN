@@ -6,13 +6,16 @@ Licensed under the MIT License
 #include "maxdnn/ConvolutionIndexes.hpp"
 #include "maxdnn/ConvolutionBlockings.hpp"
 #include "maxdnn/GpuData.hpp"
+#include "maxdnn/FileName.hpp"
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <iostream>
+#include <stdlib.h>
 using namespace std;
 
 namespace
 {
+    const char *CubinName = "multiconvolution_64.cubin";
     CUmodule hModule;
     CUfunction hKernel;
     CUtexref texInput, texFilters;
@@ -57,7 +60,14 @@ namespace maxdnn
 
         // Load our kernel
         if (hModule == 0) {
-            CUDA_CHECK( cuModuleLoad(&hModule, "multiconvolution_64.cubin") );
+            char *cubinPath = getenv("maxdnn_cubin_dir");
+            FileName cubinFile;
+            if (cubinPath != 0) {
+                cubinFile = FileName(cubinPath) / CubinName;
+            } else {
+                cubinFile = FileName(CubinName);
+            }
+            CUDA_CHECK( cuModuleLoad(&hModule, cubinFile.getString().c_str()) );
             CUDA_CHECK( cuModuleGetFunction(&hKernel, hModule, "multiconvolution_64") );
             // Load the textures
             CUDA_CHECK( cuModuleGetTexRef(&texInput, hModule, "texInput") );

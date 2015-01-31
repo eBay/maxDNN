@@ -4,6 +4,8 @@ Licensed under the MIT License
 */
 #include "maxdnn/File.hpp"
 #include "maxdnn/FileSystem.hpp"
+#include "maxdnn/FileName.hpp"
+#include "maxdnn/test.hpp"
 #include "UnitTest++.h"
 #include <vector>
 #include <cstring>
@@ -16,33 +18,39 @@ struct FileTestFixture
 {
     FileTestFixture()
     {
-        fileName = "/tmp/file-test-file";
+        FileName testDir = getTestDataDirectory();
+        if (!testDir.isEmpty()) {
+            fileName = testDir / "file-test-file";
+        }
     }
 
     ~FileTestFixture()
     {
     }
     
-    string fileName;
+    FileName fileName;
 };
     
 SUITE(File)
 {
     TEST_FIXTURE(FileTestFixture, CreateWriteRead)
     {
-        File file(fileName, File::Create|File::Read|File::Write);
+        if (!fileName.isEmpty()) {
+            
+            File file(fileName.getString(), File::Create|File::Read|File::Write);
 
-        CHECK(fs::exists(fileName));
-        CHECK(fs::isRegularFile(fileName));
+            CHECK(fs::exists(fileName.getString()));
+            CHECK(fs::isRegularFile(fileName.getString()));
 
-        const char *data = "Now is the time for all good objects to be dumped";
-        const size_t n = strlen(data);
+            const char *data = "Now is the time for all good objects to be dumped";
+            const size_t n = strlen(data);
         
-        vector<uint8_t> buf(n);
-        CHECK(file.write(data, n));
-        CHECK_EQUAL(0, file.seek(0, File::Set));
-        CHECK(file.read(&buf[0], n));
+            vector<uint8_t> buf(n);
+            CHECK(file.write(data, n));
+            CHECK_EQUAL(0, file.seek(0, File::Set));
+            CHECK(file.read(&buf[0], n));
         
-        CHECK_EQUAL(0, memcmp(data, &buf[0], n));
+            CHECK_EQUAL(0, memcmp(data, &buf[0], n));
+        }
     }
 }

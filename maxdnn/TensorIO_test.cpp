@@ -7,8 +7,10 @@ Licensed under the MIT License
 #include "maxdnn/TensorIO.hpp"
 #include "maxdnn/File.hpp"
 #include "maxdnn/FileSystem.hpp"
+#include "maxdnn/FileName.hpp"
 #include "maxdnn/MappedBlockData.hpp"
 #include "maxdnn/CppData.hpp"
+#include "maxdnn/test.hpp"
 namespace fs = maxdnn::FileSystem;
 using namespace maxdnn;
 using namespace std;
@@ -18,7 +20,10 @@ struct TensorIOTestFixture
     TensorIOTestFixture()
         : T(5, 6, 7, 8)
     {
-        fileName = "/tmp/maxdnn-TensorIO-test-file";
+        FileName testDir = getTestDataDirectory();
+        if (!testDir.isEmpty()) {
+            fileName = testDir / "maxdnn-TensorIO-test-file";
+        }
         
         const Shape &s = T.getShape();
         
@@ -39,7 +44,7 @@ struct TensorIOTestFixture
     }
 
     Tensor<Float> T;
-    string fileName;
+    FileName fileName;
 };
 
     
@@ -47,18 +52,21 @@ SUITE(Tensor)
 {
     TEST_FIXTURE(TensorIOTestFixture, write)
     {
-        fs::remove(fileName);
+        if (!fileName.isEmpty()) {
+            
+            fs::remove(fileName.getString());
 
-        // Write the tensor to a file.
-        CHECK(write(T, fileName));
+            // Write the tensor to a file.
+            CHECK(write(T, fileName.getString()));
 
-        // Load the tensor from the file.
-        Tensor<Float> T2;
-        read(T2, fileName);
+            // Load the tensor from the file.
+            Tensor<Float> T2;
+            read(T2, fileName.getString());
 
-        // Check that the loaded tensor value equals the original.
-        CHECK(T==T2);
+            // Check that the loaded tensor value equals the original.
+            CHECK(T==T2);
 
-        CHECK(fs::remove(fileName));
+            CHECK(fs::remove(fileName.getString()));
+        }
     }
 }

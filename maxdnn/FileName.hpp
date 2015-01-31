@@ -16,6 +16,8 @@ namespace maxdnn
 
         enum { PathSeparator = '/' };
             
+        FileName() {}
+
         FileName(const std::string &fileName) : _fileName(fileName) {}
 
         FileName(const std::string &path, const std::string &fileName)
@@ -82,6 +84,11 @@ namespace maxdnn
 
         std::string getBaseName() const;
         
+        bool isEmpty() const 
+        {
+            return _fileName.empty();
+        }
+
         bool operator==(const FileName &other) const 
         {
             return _fileName == other._fileName;

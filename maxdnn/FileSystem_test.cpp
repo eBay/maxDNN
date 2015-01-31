@@ -3,6 +3,8 @@ Copyright (c) 2014 eBay Software Foundation
 Licensed under the MIT License
 */
 #include "maxdnn/FileSystem.hpp"
+#include "maxdnn/FileName.hpp"
+#include "maxdnn/test.hpp"
 #include "UnitTest++.h"
 using namespace maxdnn;
 using namespace std;
@@ -12,49 +14,56 @@ struct FileSystemTestFixture
 {
     FileSystemTestFixture()
     {
-        path = "/tmp/fs-test";
-        path1 = "/tmp/fs-test/foo";
-        path2 = "/tmp/fs-test/foo/bar";
-        path3 = "/tmp/fs-test/foo/baz";
-        fileName = "/tmp/fs-test/foo/baz/file";
+        FileName testDir(getTestDataDirectory());
+        if (!testDir.isEmpty()) {
+            path = testDir / "fs-test";
+            path1 = testDir / "fs-test/foo";
+            path2 = testDir / "fs-test/foo/bar";
+            path3 = testDir / "fs-test/foo/baz";
+            fileName = testDir / "fs-test/foo/baz/file";
+        }
     }
 
     ~FileSystemTestFixture()
     {
     }
     
-    string path;
-    string path1;
-    string path2;
-    string path3;
-    string fileName;
+    FileName path;
+    FileName path1;
+    FileName path2;
+    FileName path3;
+    FileName fileName;
 };
     
 SUITE(FileSystem)
 {
     TEST_FIXTURE(FileSystemTestFixture, Directories)
     {
-        fs::deltree(path);
-        CHECK(!fs::exists(path));
-        CHECK(fs::mkdir(path));
-        CHECK(fs::mkdir(path1));
-        CHECK(fs::mkdir(path2));
-        CHECK(fs::mkdir(path3));
-        CHECK(fs::exists(path3));
-        CHECK(fs::isDirectory(path));
-        CHECK(fs::touch(fileName));
-        CHECK(fs::exists(fileName));
-        CHECK(fs::isRegularFile(fileName));
-        CHECK(fs::deltree(path));
-        CHECK(!fs::exists(path));
+        if (!path.isEmpty()) {
+            fs::deltree(path.getString());
+            CHECK(!fs::exists(path.getString()));
+            CHECK(fs::mkdir(path.getString()));
+            CHECK(fs::mkdir(path1.getString()));
+            CHECK(fs::mkdir(path2.getString()));
+            CHECK(fs::mkdir(path3.getString()));
+            CHECK(fs::exists(path3.getString()));
+            CHECK(fs::isDirectory(path.getString()));
+            CHECK(fs::touch(fileName.getString()));
+            CHECK(fs::exists(fileName.getString()));
+            CHECK(fs::isRegularFile(fileName.getString()));
+            CHECK(fs::deltree(path.getString()));
+            CHECK(!fs::exists(path.getString()));
+        }
     }
 
     TEST_FIXTURE(FileSystemTestFixture, mkpath)
     {
-        fs::deltree(path3);
-        CHECK(!fs::exists(path3));
-        CHECK(fs::mkpath(path3));
-        CHECK(fs::isDirectory(path3));
-        fs::deltree(path3);
+        if (!path.isEmpty()) {
+            fs::deltree(path3.getString());
+            CHECK(!fs::exists(path3.getString()));
+            CHECK(fs::mkpath(path3.getString()));
+            CHECK(fs::isDirectory(path3.getString()));
+            fs::deltree(path3.getString());
+        }
     }
 }

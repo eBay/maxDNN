@@ -56,16 +56,18 @@ The instructions are for MS Windows, but using the Linux analog of each of the p
 
 6. Run the convolution suite unit tests:
 
-        maxdnn/maxdnn_test.bin suite convolution
+        ./maxdnn_test.bin suite convolution
         
 7.  or run all unit tests:
 
-        maxdnn/maxdnn_test.bin
+        ./maxdnn_test.bin
 
 8. Optionally, run the tests again, checking result accuracy against the result of CPU convolution. Do so by setting the path where generated reference data should be stored. Generating reference data will take about 30 minutes, because the CPU convolution is very slow, but subsequent runs will just read it from disk instead of generating it again.
 
         export maxdnn_test_data=/path/to/test/data/storage
-        maxdnn/maxdnn_test.bin suite convolution
+        ./maxdnn_test.bin suite convolution
+
+9. If you want to run maxdnn_test from another directory, you must set the maxdnn_cubin_dir environment variable to point to the directory that contains the file multiconvolution_64.cubin
 
 Benchmark
 ---------------
@@ -102,3 +104,12 @@ Device "GeForce GTX 980 (0)"
          10                        flop_sp_efficiency              FLOP Efficiency(Peak Single)      94.39%      94.76%      94.55%
 ```
 
+Add Convolution Layers
+---------------
+Add convolution layers by editing the file networks/conf.cfg. You must recompile maxDNN each time you change the layer configuration.
+
+Test individual network layers by naming them on the command line. The format of the name is convolve_[maxdnn|cudnn]_[layer]
+
+For example, to test just layer alexnet_conv2 using maxdnn, run
+
+        ./maxdnn_test.bin convolve_maxdnn_alexnet_conv2

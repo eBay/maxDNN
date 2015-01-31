@@ -10,7 +10,7 @@ Licensed under the MIT License
 
 namespace maxdnn
 {
-    // FNV has, as described at:
+    // FNV hash, as described at:
     // http://www.eternallyconfuzzled.com/tuts/algorithms/jsw_tut_hashing.aspx
     template<class Record>
     struct Hash

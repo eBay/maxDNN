@@ -5,6 +5,8 @@ Licensed under the MIT License
 #include "maxdnn/MemoryMap.hpp"
 #include "maxdnn/FileSystem.hpp"
 #include "maxdnn/File.hpp"
+#include "maxdnn/FileName.hpp"
+#include "maxdnn/test.hpp"
 #include "UnitTest++.h"
 #include <vector>
 #include <cstring>
@@ -17,7 +19,10 @@ struct MemoryMapTestFixture
 {
     MemoryMapTestFixture()
     {
-        fileName = "/tmp/maxdnn-memory-map-test-file";
+        FileName testDir = getTestDataDirectory();
+        if (!testDir.isEmpty()) {
+            fileName = testDir / "maxdnn-memory-map-test-file";
+        }
         length = 16385;
     }
 
@@ -25,7 +30,7 @@ struct MemoryMapTestFixture
     {
     }
     
-    string fileName;
+    FileName fileName;
     size_t length;
 };
     
@@ -33,26 +38,29 @@ SUITE(MemoryMap)
 {
     TEST_FIXTURE(MemoryMapTestFixture, CreateWriteRead)
     {
-        fs::remove(fileName);
+        if (!fileName.isEmpty()) {
 
-        {
-            vector<uint8_t> data(length);
-            for (size_t i = 0; i < length; ++i) {
-                data[i] = uint8_t(i%256);
-            }
+            fs::remove(fileName.getString());
+
+            {
+                vector<uint8_t> data(length);
+                for (size_t i = 0; i < length; ++i) {
+                    data[i] = uint8_t(i%256);
+                }
             
-            File fwrite(fileName, File::Write|File::Create);
-            CHECK(fwrite.isOk());
-            CHECK(fwrite.write(&data[0], length));
-        }
+                File fwrite(fileName.getString(), File::Write|File::Create);
+                CHECK(fwrite.isOk());
+                CHECK(fwrite.write(&data[0], length));
+            }
         
-        {
-            File file(fileName, File::Read);
-            MemoryMap mread;
-            CHECK(mread.map(file.getDescriptor(), length, MemoryMap::Read, MemoryMap::Private));
-            uint8_t *data = static_cast<uint8_t *>(mread.getMemory());
-            for (size_t i = 0; i < length; ++i) {
-                CHECK_EQUAL(uint8_t(i%256), data[i]);
+            {
+                File file(fileName.getString(), File::Read);
+                MemoryMap mread;
+                CHECK(mread.map(file.getDescriptor(), length, MemoryMap::Read, MemoryMap::Private));
+                uint8_t *data = static_cast<uint8_t *>(mread.getMemory());
+                for (size_t i = 0; i < length; ++i) {
+                    CHECK_EQUAL(uint8_t(i%256), data[i]);
+                }
             }
         }
     }
