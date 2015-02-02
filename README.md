@@ -7,7 +7,7 @@ Introduction
 
 maxDNN is an existence proof that high efficiency convolution GPU kernels are possible. We solve the problem for the forward propagation phase of convolutional neural networks, and achieve roughly 95% computational efficiency for a typical network layer. This is a significant improvement over the state of the art which performs in the 30%-75% range.
 
-The kernel runs on NVIDIA Maxwell GPUs (eg, Geforce GTX980) and is a derivative work of the SGEMM kernel from the [Maxas Maxwell Assembler project](https://code.google.com/p/maxas/).
+The kernel runs on NVIDIA Maxwell GPUs (eg, Geforce GTX980) and is a derivative work of the SGEMM kernel from the [Maxas Maxwell Assembler project](https://github.com/NervanaSystems/maxas).
 
 Technical details and performance analysis of the maxDNN kernel are documented in the report
 [maxDNN: An Efficient Convolution Kernel for Deep Learning with Maxwell GPUs](http://arxiv-web3.library.cornell.edu/abs/1501.06633)
@@ -33,7 +33,7 @@ Requirements
 + CUDA Toolkit (tested with version 6.5): https://developer.nvidia.com/cuda-downloads
 + UnitTest++ unit testing framework: http://unittest-cpp.sourceforge.net/
 + cuDNN library version 2: https://developer.nvidia.com/cuDNN
-+ MaxAs Assembler for NVIDIA Maxwell Architecture: https://code.google.com/p/maxas/
++ MaxAs Assembler for NVIDIA Maxwell Architecture: https://github.com/NervanaSystems/maxas
 
 Install
 -------
@@ -44,8 +44,13 @@ Install
 
 2. Install the external requirements above.
 
-3. Set up the MaxAs environment by following the instructions at: https://code.google.com/p/maxas/wiki/GettingStarted
+3. Set up the MaxAs environment by following the instructions at: https://github.com/NervanaSystems/maxas/wiki/Getting-Started
 The instructions are for MS Windows, but using the Linux analog of each of the path variables works fine.
+
+3.b. Patch the maxas assembler with the patch file maxas-maxDNN.patch. This adds a missing texture load mode to the assembler, and will become unnecessary once the patch has been adopted by the maxas project. 
+
+        cd /path/to/maxas
+        git apply /path/to/maxDNN/maxas-maxDNN.patch
 
 4. Edit maxdnn/Makefile to ensure that CUDA_PATH, CUDNN_PATH, UNITTEST_PATH, and MAXAS_PATH are correct for your system.
 
