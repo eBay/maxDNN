@@ -12,11 +12,11 @@ export maxdnn_maxwell=1
 #
 EXTERNALS=$(HOME)/develop/externals
 CUDA_PATH=/usr/local/cuda
-CUDNN_PATH=$(EXTERNALS)/cudnn-6.5-linux-x64-R2-rc1
-UNITTEST_PATH=$(EXTERNALS)/UnitTest++
+CUDNN_PATH=$(EXTERNALS)/cudnn-6.5-linux-x64-v2-rc2
+UNITTEST_PATH=/usr/local/include/UnitTest++
 MAXAS_PATH=$(EXTERNALS)/maxas
 
-INCLUDE=-I.. -I$(UNITTEST_PATH)/src -I$(CUDA_PATH)/include -I$(CUDA_PATH)/samples/common/inc -I. -I$(CUDNN_PATH)
+INCLUDE=-I.. -I$(UNITTEST_PATH) -I$(CUDA_PATH)/include -I$(CUDA_PATH)/samples/common/inc -I. -I$(CUDNN_PATH)
 
 # DEBUG=2 => CPP and CUDA debugging.
 ifeq ($(DEBUG),2)
@@ -34,7 +34,7 @@ NVCCFLAGS=-O3 -lineinfo -Xcompiler $(INCLUDE)
 endif
 endif
 LDFLAGS=-g -L. -L$(CUDA_PATH)/lib64 -L$(CUDNN_PATH)
-LDLIBS=-lmaxdnn -lcuda -lcudart -lcudnn_static -lculibos -lnvToolsExt -lcublas
+LDLIBS=-lmaxdnn -lcuda -lcudart -lcudnn_static -lculibos -lnvToolsExt -lcublas -ldl -lpthread
 TEST_LDFLAGS=$(LDFLAGS) -L$(UNITTEST_PATH)
 
 NVCC=$(CUDA_PATH)/bin/nvcc
@@ -129,7 +129,7 @@ depend: .depend
 multiconvolution_64.cubin: multiconvolution_64.cu multiconvolution_64.sass
 	$(NVCC) -arch sm_50 -cubin $(INCLUDE) multiconvolution_64.cu
 	$(MAXAS_PATH)/maxas.pl -e -k multiconvolution_64 multiconvolution_64.cubin multiconvolution_64-skeleton.asm
-	$(MAXAS_PATH)/maxas.pl -i multiconvolution_64.sass multiconvolution_64.cubin
+	$(MAXAS_PATH)/maxas.pl -i multiconvolution_64.sass multiconvolution_64.cubin || (echo "maxas.pl failed $$?"; exit 1)
 	$(MAXAS_PATH)/maxas.pl -e -k multiconvolution_64 multiconvolution_64.cubin multiconvolution_64-final.asm
 
 # Make sure generated header file, conv.hpp, is generated before
@@ -149,6 +149,7 @@ clean:
 	$(RM) conv.hpp
 	$(RM) conv_test.cpp
 	$(RM) .depend
+	$(RM) multiconvolution_64.cubin
 
 dist-clean: clean
 	$(RM) *~ .depend

@@ -6,6 +6,7 @@ Licensed under the MIT License
 #define maxdnn_FileSystem_h
 
 #include <string>
+#include <sys/types.h>
 
 namespace maxdnn
 {

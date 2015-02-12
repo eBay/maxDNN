@@ -9,6 +9,7 @@ Licensed under the MIT License
 #include "UnitTest++.h"
 #include <vector>
 #include <cstring>
+#include <sys/types.h>
 #include <stdint.h>
 using namespace maxdnn;
 using namespace std;

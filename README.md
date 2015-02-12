@@ -29,9 +29,9 @@ Requirements
 ------------
 
 + NVIDIA GPU of compute capability 5.0 or better (i.e., Maxwell GPU)
-+ Linux (tested with Ubuntu 12.04)
++ Linux (tested with Ubuntu 12.04, 14.04)
 + CUDA Toolkit (tested with version 6.5): https://developer.nvidia.com/cuda-downloads
-+ UnitTest++ unit testing framework: http://unittest-cpp.sourceforge.net/
++ UnitTest++ unit testing framework: https://github.com/unittest-cpp/unittest-cpp
 + cuDNN library version 2: https://developer.nvidia.com/cuDNN
 + MaxAs Assembler for NVIDIA Maxwell Architecture: https://github.com/NervanaSystems/maxas
 
@@ -42,37 +42,36 @@ Install
 
         git clone https://github.com/eBay/maxDNN.git
 
-2. Install the external requirements above.
+2. Install the external requirements above. Add the CUDA Toolkit bin and lib64 directories to the PATH and LD_LIBRARY_PATH environment variables, respectively. For example:
 
-3. Set up the MaxAs environment by following the instructions at: https://github.com/NervanaSystems/maxas/wiki/Getting-Started
-The instructions are for MS Windows, but using the Linux analog of each of the path variables works fine.
+        export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+        export PATH=$PATH:/usr/local/cuda/bin
 
-4. Patch the maxas assembler with the patch file maxas-maxDNN.patch. This adds a missing texture load mode to the assembler, and will become unnecessary once the patch has been adopted by the maxas project. 
+3. Set the PERL5LIB environment variable to point to the maxas folder. For example:
 
-        cd /path/to/maxas
-        git apply /path/to/maxDNN/maxas-maxDNN.patch
+        export PERL5LIB=~/develop/externals/maxas
 
-5. Edit maxdnn/Makefile to ensure that CUDA_PATH, CUDNN_PATH, UNITTEST_PATH, and MAXAS_PATH are correct for your system.
+4. Edit maxdnn/Makefile to ensure that CUDA_PATH, CUDNN_PATH, UNITTEST_PATH, and MAXAS_PATH are correct for your system.
 
-6. Build.
+5. Build.
 
         cd maxDNN/maxdnn
         make all
 
-7. Run the convolution suite unit tests:
+6. Run the convolution suite unit tests:
 
         ./maxdnn_test.bin suite convolution
         
-8.  or run all unit tests:
+7.  or run all unit tests:
 
         ./maxdnn_test.bin
 
-9. Optionally, run the tests again, checking result accuracy against the result of CPU convolution. Do so by setting the path where generated reference data should be stored. Generating reference data will take about 30 minutes, because the CPU convolution is very slow, but subsequent runs will just read it from disk instead of generating it again.
+8. Optionally, run the tests again, checking result accuracy against the result of CPU convolution. Do so by setting the path where generated reference data should be stored. Generating reference data will take about 30 minutes, because the CPU convolution is very slow, but subsequent runs will just read it from disk instead of generating it again.
 
         export maxdnn_test_data=/path/to/test/data/storage
         ./maxdnn_test.bin suite convolution
 
-10. If you want to run maxdnn_test from another directory, you must set the maxdnn_cubin_dir environment variable to point to the directory that contains the file multiconvolution_64.cubin
+9. If you want to run maxdnn_test from another directory, you must set the maxdnn_cubin_dir environment variable to point to the directory that contains the file multiconvolution_64.cubin
 
 Benchmark
 ---------------
