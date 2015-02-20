@@ -262,17 +262,17 @@ LOOP:
 
     my %insert =
     (
-         j0c31 => "--:-:2:-:1  \@P0 TLDS.LZ.T loadFlt02, loadFlt00, trackFlt0, 0x63, 1D, RGBA;\n",
-         j0c33 => "--:-:3:-:1  \@P0 TLDS.LZ.T loadIm02, loadIm00, trackIm0, 0x62, 1D, RGBA; // Set Dep 2\n",
+        j0c31 => "--:-:2:-:1  \@P0 TLDS.LZ.T loadFlt02, loadFlt00, trackFlt0, 0x63, 1D, RGBA;\n",
+        j0c33 => "--:-:3:-:1  \@P0 TLDS.LZ.T loadIm02, loadIm00, trackIm0, 0x62, 1D, RGBA; // Set Dep 3\n",
 
-         j1c31 => "--:-:4:-:1  \@P0 TLDS.LZ.T loadFlt42, loadFlt40, trackFlt4, 0x63, 1D, RGBA;\n",
-         j1c33 => "--:-:5:-:1  \@P0 TLDS.LZ.P loadIm42, loadIm40, trackIm4, 0x62, 1D, RGBA; // Set Dep 3\n",
+        j1c31 => "--:-:4:-:1  \@P0 TLDS.LZ.T loadFlt42, loadFlt40, trackFlt4, 0x63, 1D, RGBA;\n",
+        j1c33 => "--:-:5:-:1  \@P0 TLDS.LZ.P loadIm42, loadIm40, trackIm4, 0x62, 1D, RGBA; // Set Dep 5\n",
 
-         j5c30 => "02:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64+512>], loadFlt00; // Wait Dep 2\n",
-         j5c34 => "04:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64>], loadIm00;\n",
+        j5c30 => "02:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64+512>], loadFlt00; // Wait Dep 2\n",
+        j5c34 => "04:-:-:-:1  \@P0 STS.128 [writeS + 4x<0*64>], loadIm00;\n",
 
-         j6c30 => "08:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64+512>], loadFlt40; // Wait Dep 3\n",
-         j6c34 => "10:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64>], loadIm40;\n",
+        j6c30 => "08:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64+512>], loadFlt40; // Wait Dep 4\n",
+        j6c34 => "10:-:-:-:1  \@P0 STS.128 [writeS + 4x<4*64>], loadIm40;\n",
 
         j6c62 =>
                 "01:-:-:-:5      BAR.SYNC 0;                            // Wait Dep 1\n" .
