@@ -1,4 +1,4 @@
-#maxDNN
+# maxDNN
 
 High Efficiency Convolution Kernel for NVIDIA Maxwell GPU Architecture
 
